@@ -8,7 +8,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_KEY"]
 NEWS_API_KEY = st.secrets["NEWS_KEY"]
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('models/gemini-1.5-flash')
 
 st.set_page_config(page_title="NewsVocab AI", layout="centered")
 
