@@ -17,16 +17,31 @@ def get_daily_quiz():
     news_url = f"https://newsapi.org/v2/top-headlines?sources=bbc-news,cnn,reuters&apiKey={NEWS_API_KEY}"
     response = requests.get(news_url).json()
     articles = response.get('articles', [])[:5]
+    
+    if not articles:
+        return [] # 防止新聞抓取失敗
+
     context_text = "\n".join([f"Title: {a['title']}" for a in articles])
 
+    # 指定更精確的模型路徑
+    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    
     prompt = f"""
     Based on these news articles: {context_text}
     Generate 5 English vocabulary quiz items in JSON format.
-    Return ONLY a raw JSON list with fields: "word", "options" (list of 4), "answer" (string), "sentence", "link", "grammar".
+    Return ONLY a raw JSON list. No markdown blocks.
+    Structure: [{{"word": "...", "options": ["...", "..."], "answer": "...", "sentence": "...", "link": "...", "grammar": "..."}}]
     """
-    res = model.generate_content(prompt)
-    return json.loads(res.text.strip().replace('```json', '').replace('```', ''))
-
+    
+    try:
+        res = model.generate_content(prompt)
+        # 清除 AI 可能夾帶的 Markdown 語法 (```json ... ```)
+        text_content = res.text.strip().lstrip('```json').rstrip('```').strip()
+        return json.loads(text_content)
+    except Exception as e:
+        st.error(f"AI 生成出錯: {e}")
+        return []
+        
 # 狀態初始化
 if 'quiz_data' not in st.session_state:
     st.session_state.quiz_data = []
