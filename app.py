@@ -8,11 +8,12 @@ GEMINI_API_KEY = st.secrets["GEMINI_KEY"]
 NEWS_API_KEY = st.secrets["NEWS_KEY"]
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-pro')
 
 st.set_page_config(page_title="NewsVocab AI", layout="centered")
 
-# 核心邏輯：抓取新聞並透過 AI 生成題目
+# 將 models/gemini-1.5-flash 改為 gemini-1.5-flash-latest 或 gemini-pro
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 def get_daily_quiz():
     news_url = f"https://newsapi.org/v2/top-headlines?sources=bbc-news,cnn,reuters&apiKey={NEWS_API_KEY}"
     response = requests.get(news_url).json()
