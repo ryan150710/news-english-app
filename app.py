@@ -11,52 +11,52 @@ except Exception as e:
     st.error("Secrets 設定錯誤，請確認 GEMINI_KEY 與 NEWS_KEY 是否已填寫。")
     st.stop()
 
-# 2. 初始化 AI
+# 2. 初始化 AI 並找出可用模型
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 使用最基礎、支援度最高的模型名稱
-model = genai.GenerativeModel('gemini-pro')
+@st.cache_resource
+def find_available_model():
+    try:
+        # 列出所有可用的模型
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                # 優先選擇 flash 或 pro 1.5 版本
+                if '1.5' in m.name:
+                    return m.name
+        # 如果找不到 1.5，隨便回傳第一個支援生成內容的模型
+        return 'models/gemini-pro' 
+    except Exception as e:
+        st.error(f"無法列出模型清單: {e}")
+        return 'models/gemini-pro'
+
+AVAILABLE_MODEL = find_available_model()
 
 st.set_page_config(page_title="NewsVocab AI", layout="centered")
 
 def get_daily_quiz():
-    # 抓取新聞
     news_url = f"https://newsapi.org/v2/top-headlines?sources=bbc-news,cnn,reuters&apiKey={NEWS_API_KEY}"
     try:
         response = requests.get(news_url).json()
         articles = response.get('articles', [])[:5]
-        if not articles:
-            st.warning("抓不到新聞內容，請檢查 NewsAPI Key 是否過期。")
-            return []
         context_text = "\n".join([f"News: {a['title']}" for a in articles])
     except:
         st.error("新聞抓取失敗")
         return []
 
-    # 設定 AI 指令 (Prompt)
     prompt = f"""
     Based on these news: {context_text}
     Generate 5 English vocabulary quiz items in JSON format.
-    Output ONLY a raw JSON list, no markdown, no words before or after.
-    JSON structure: 
-    [
-      {{
-        "word": "The word",
-        "options": ["Correct", "Wrong1", "Wrong2", "Wrong3"],
-        "answer": "Correct",
-        "sentence": "context sentence",
-        "link": "https://...",
-        "grammar": "Chinese explanation"
-      }}
-    ]
+    Output ONLY a raw JSON list.
+    Structure: [{{"word": "..", "options": ["..", "..", "..", ".."], "answer": "..", "sentence": "..", "link": "..", "grammar": ".."}}]
     """
 
     try:
-        # 執行生成
+        # 使用偵測到的可用模型
+        model = genai.GenerativeModel(AVAILABLE_MODEL)
         res = model.generate_content(prompt)
         raw_text = res.text.strip()
         
-        # 強制清理 Markdown 標籤 (避免 AI 回傳 ```json ... ```)
+        # 清理 JSON 標籤
         if "```" in raw_text:
             raw_text = raw_text.split("```")[1]
             if raw_text.startswith("json"):
@@ -64,16 +64,17 @@ def get_daily_quiz():
         
         return json.loads(raw_text)
     except Exception as e:
-        st.error(f"AI 生成出錯: {e}")
+        st.error(f"目前使用的模型 {AVAILABLE_MODEL} 生成出錯: {e}")
         return []
 
-# --- 介面邏輯 ---
+# --- UI 介面 ---
+st.title("🗞️ NewsVocab AI 學習電台")
+st.caption(f"系統偵測到可用模型: {AVAILABLE_MODEL}")
+
 if 'quiz_data' not in st.session_state:
     st.session_state.quiz_data = []
     st.session_state.idx = 0
     st.session_state.mistakes = []
-
-st.title("🗞️ NewsVocab AI 學習電台")
 
 tab1, tab2, tab3 = st.tabs(["🔥 每日測驗", "📚 錯題複習", "📖 文法解析"])
 
@@ -91,10 +92,8 @@ with tab1:
         st.subheader(f"單字：{curr['word']}")
         st.info(f"Context: {curr['sentence']}")
         
-        # 使用 Columns 排版選項按鈕
-        cols = st.columns(2)
-        for i, opt in enumerate(curr['options']):
-            if cols[i%2].button(opt, key=f"btn_{opt}"):
+        for opt in curr['options']:
+            if st.button(opt, key=f"btn_{opt}"):
                 if opt == curr['answer']:
                     st.success("✅ 答對了！")
                     st.balloons()
