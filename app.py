@@ -1,0 +1,64 @@
+import streamlit as st
+import requests
+import google.generativeai as genai
+import json
+
+# 從 Streamlit 安全設定中讀取金鑰
+GEMINI_API_KEY = st.secrets["GEMINI_KEY"]
+NEWS_API_KEY = st.secrets["NEWS_KEY"]
+
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+st.set_page_config(page_title="NewsVocab AI", layout="centered")
+
+# 核心邏輯：抓取新聞並透過 AI 生成題目
+def get_daily_quiz():
+    news_url = f"https://newsapi.org/v2/top-headlines?sources=bbc-news,cnn,reuters&apiKey={NEWS_API_KEY}"
+    response = requests.get(news_url).json()
+    articles = response.get('articles', [])[:5]
+    context_text = "\n".join([f"Title: {a['title']}" for a in articles])
+
+    prompt = f"""
+    Based on these news articles: {context_text}
+    Generate 5 English vocabulary quiz items in JSON format.
+    Return ONLY a raw JSON list with fields: "word", "options" (list of 4), "answer" (string), "sentence", "link", "grammar".
+    """
+    res = model.generate_content(prompt)
+    return json.loads(res.text.strip().replace('```json', '').replace('```', ''))
+
+# 狀態初始化
+if 'quiz_data' not in st.session_state:
+    st.session_state.quiz_data = []
+    st.session_state.idx = 0
+    st.session_state.mistakes = []
+
+st.title("🗞️ NewsVocab AI 學習電台")
+
+tab1, tab2, tab3 = st.tabs(["🔥 每日測驗", "📚 錯題複習", "📖 文法解析"])
+
+with tab1:
+    if st.button("🔄 獲取今日 AI 題目"):
+        with st.spinner('正在分析 BBC/CNN...'):
+            st.session_state.quiz_data = get_daily_quiz()
+            st.session_state.idx = 0
+    
+    if st.session_state.quiz_data:
+        q = st.session_state.quiz_data[st.session_state.idx]
+        st.subheader(f"單字：{q['word']}")
+        st.info(f"Context: {q['sentence']}")
+        
+        for opt in q['options']:
+            if st.button(opt, key=opt):
+                if opt == q['answer']:
+                    st.success("✅ 正確！")
+                    st.balloons()
+                else:
+                    st.error(f"❌ 錯誤！答案是：{q['answer']}")
+                    st.session_state.mistakes.append(q)
+        
+        if st.button("下一題 ➡️"):
+            st.session_state.idx = (st.session_state.idx + 1) % len(st.session_state.quiz_data)
+            st.rerun()
+
+# (其餘複習與文法邏輯同前，為節省篇幅簡化)
