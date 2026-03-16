@@ -58,7 +58,7 @@ with tab1:
                     st.session_state.mistakes.append(q)
         
         if st.button("下一題 ➡️"):
-            st.session_state.idx = (st.session_state.idx + 1) % len(st.session_state.quiz_list)
+            st.session_state.idx = (st.session_state.idx + 1) % len(st.session_state.quiz_data)
             st.rerun()
 
 # (其餘複習與文法邏輯同前，為節省篇幅簡化)
